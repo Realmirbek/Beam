@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Demo</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --success: #4cc9f0;
+            --danger: #f72585;
+            --warning: #f8961e;
+            --dark: #212529;
+            --light: #f8f9fa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            color: var(--dark);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+
+        .status.connected .status-indicator {
+            background-color: #2ecc71;
+            box-shadow: 0 0 10px #2ecc71;
+        }
+
+        .status.disconnected .status-indicator {
+            background-color: #e74c3c;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #3a56d4;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background-color: var(--success);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #3db5d8;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #e5177a;
+            transform: translateY(-2px);
+        }
+
+        .panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel-title {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .messages {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .message {
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            border-left: 4px solid;
+            animation: fadeIn 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message-info {
+            border-color: var(--primary);
+        }
+
+        .message-success {
+            border-color: var(--success);
+        }
+
+        .message-warning {
+            border-color: var(--warning);
+        }
+
+        .message-error {
+            border-color: var(--danger);
+        }
+
+        .message-time {
+            font-size: 0.8rem;
+            color: #6c757d;
+            white-space: nowrap;
+            margin-left: 10px;
+        }
+
+        .user-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            flex-grow: 1;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+            }
+
+            .user-form {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WebSocket Demo</h1>
+            <p>Тестирование реального времени с Django Channels</p>
+        </header>
+
+        <div class="status" id="connectionStatus">
+            <div class="status-indicator"></div>
+            <span id="statusText">Подключение...</span>
+        </div>
+
+        <div class="panel">
+            <h2 class="panel-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" fill="currentColor"/>
+                    <path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2ZM12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12C4 7.58172 7.58172 4 12 4Z" fill="currentColor"/>
+                </svg>
+                Управление
+            </h2>
+
+            <div class="controls">
+                <div class="user-form">
+                    <input type="text" id="userNameInput" placeholder="Имя пользователя" value="Тестовый пользователь">
+                    <button class="btn-primary" id="createUserBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 6V18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M6 12H18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        Создать пользователя
+                    </button>
+                </div>
+
+                <button class="btn-secondary" id="testSocketBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22 12C22 6.47715 17.5228 2 12 2M12 2C6.47715 2 2 6.47715 2 12M12 2V12M22 12C22 17.5228 17.5228 22 12 22M12 22C6.47715 22 2 17.5228 2 12M12 22V12M12 12H2M12 12H22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    Тест соединения
+                </button>
+
+                <button class="btn-danger" id="disconnectBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    Отключиться
+                </button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2 class="panel-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 12V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V12M20 12L12 16L4 12M20 12L18 6H6L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Журнал событий
+            </h2>
+
+            <div class="messages" id="messagesContainer">
+                <div class="message message-info">
+                    <div>Система инициализирована. Ожидание подключения...</div>
+                    <div class="message-time" id="currentTime"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM элементы
+        const connectionStatus = document.getElementById('connectionStatus');
+        const statusText = document.getElementById('statusText');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const createUserBtn = document.getElementById('createUserBtn');
+        const testSocketBtn = document.getElementById('testSocketBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const userNameInput = document.getElementById('userNameInput');
+        const currentTimeElement = document.getElementById('currentTime');
+
+        // Обновление времени
+        function updateTime() {
+            const now = new Date();
+            currentTimeElement.textContent = now.toLocaleTimeString();
+            setTimeout(updateTime, 1000);
+        }
+
+        updateTime();
+
+        // WebSocket соединение
+        let socket;
+
+        function connectWebSocket() {
+            socket = new WebSocket(`ws://${window.location.host}/ws/notifications/`);
+
+            socket.onopen = () => {
+                connectionStatus.className = 'status connected';
+                statusText.textContent = 'Подключено';
+                addMessage('WebSocket подключен', 'success');
+            };
+
+            socket.onclose = () => {
+                connectionStatus.className = 'status disconnected';
+                statusText.textContent = 'Отключено';
+                addMessage('WebSocket отключен', 'error');
+
+                // Попытка переподключения через 5 секунд
+                setTimeout(connectWebSocket, 5000);
+            };
+
+            socket.onerror = (error) => {
+                addMessage(`Ошибка WebSocket: ${error.message}`, 'error');
+            };
+
+            socket.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    addMessage(data.message, 'info');
+                } catch (err) {
+                    addMessage(`Ошибка обработки сообщения: ${err}`, 'error');
+                }
+            };
+        }
+
+        // Добавление сообщения в журнал
+        function addMessage(text, type = 'info') {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message message-${type}`;
+
+            const now = new Date();
+            messageElement.innerHTML = `
+                <div>${text}</div>
+                <div class="message-time">${now.toLocaleTimeString()}</div>
+            `;
+
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Создание пользователя
+        createUserBtn.addEventListener('click', async () => {
+            const userName = userNameInput.value.trim() || 'Тестовый пользователь';
+
+            try {
+                const response = await fetch('/api/users/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ name: userName })
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                const data = await response.json();
+                addMessage(`Пользователь создан: ${userName} (ID: ${data.id})`, 'success');
+            } catch (error) {
+                addMessage(`Ошибка при создании пользователя: ${error.message}`, 'error');
+            }
+        });
+
+        // Тест соединения
+        testSocketBtn.addEventListener('click', () => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ action: 'ping', timestamp: new Date().toISOString() }));
+                addMessage('Тестовое сообщение отправлено', 'info');
+            } else {
+                addMessage('WebSocket не подключен', 'error');
+            }
+        });
+
+        // Отключение
+        disconnectBtn.addEventListener('click', () => {
+            if (socket) {
+                socket.close();
+            }
+        });
+
+        // Получение CSRF токена
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Инициализация
+        connectWebSocket();
+    </script>
+</body>
+</html>
